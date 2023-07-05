@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from tkinter import filedialog
+from tkinter.ttk import Progressbar
 import csv
 import datetime
 import os
@@ -9,6 +10,7 @@ import requests
 import json
 import getpass
 import sys
+from threading import Thread
 
 # Version 1.3.0
 
@@ -17,10 +19,18 @@ folder_path = 'C:/Program Files (x86)/Work-Record'
 if not os.path.exists(folder_path):
     os.makedirs(folder_path)
 
-def download_file(url, save_path):
-    response = requests.get(url)
+def download_file(url, save_path, progress_var, percentage_var):
+    response = requests.get(url, stream=True)
+    total_length = int(response.headers.get('content-length'))
+    dl = 0
     with open(save_path, 'wb') as file:
-        file.write(response.content)
+        for chunk in response.iter_content(chunk_size=1024):
+            if chunk:
+                dl += len(chunk)
+                file.write(chunk)
+                progress = int((dl / total_length) * 100)
+                progress_var.set(progress)
+                percentage_var.set(f'{progress}%')
 
 def compare_versions(current_version, latest_version):
     current_parts = current_version.split('.')
@@ -67,23 +77,40 @@ def check_update():
     if download_url:
         latest_version = data['tag_name']
         current_version = root.title()
-        #print(f"Latest version: {latest_version}")
-        #print(f"Current version: {current_version}")
 
-        # 進行版本比較
         result = compare_versions(current_version, latest_version)
         if result == -1:
-            response = messagebox.askyesno('有新版本', '有新版本可用，是否要更新？')      
+            response = messagebox.askyesno('有新版本', '有新版本可用，是否要更新？')
             if response:
                 username = getpass.getuser()
-                #print(username)
-
-                # 下載最新版本的 Clock-In-NEW.exe 檔案
                 download_path = f'C:/Users/{username}/Desktop'
                 save_path = os.path.join(download_path, file_name)
-                download_file(download_url, save_path)
-                messagebox.showinfo('成功', '下載完成，即將關閉舊版本。')
-                root.destroy()
+
+                download_window = tk.Toplevel(root)
+                download_window.title('新版本下載進度')
+                download_window.resizable(False,False)
+
+                progress_var = tk.IntVar()
+                percentage_var = tk.StringVar()
+
+                progress_bar = Progressbar(download_window, length=300, mode='determinate', variable=progress_var)
+                progress_bar.pack(pady=2)
+
+                percentage_label = tk.Label(download_window, textvariable=percentage_var)
+                percentage_label.pack()
+
+                download_thread = Thread(target=download_file, args=(download_url, save_path, progress_var, percentage_var))
+                download_thread.start()
+
+                def check_download():
+                    if download_thread.is_alive():
+                        root.after(100, check_download)
+                    else:
+                        download_window.destroy()
+                        messagebox.showinfo('成功', '下載完成，即將關閉舊版本。')
+                        root.destroy()
+
+                root.after(100, check_download)
 
         elif result == 0:
             messagebox.showinfo('訊息', '已經是最新版本。')
@@ -121,23 +148,43 @@ def export_records():
         signout = record[2]
 
         if date not in records:
-            records[date] = {'日期': date, '簽到時間': '', '簽退時間': ''}
+            records[date] = {'日期': date, '簽到時間': '', '簽退時間': '', '工時': ''}
         
         if signin:
-            records[date]['簽到時間'] = signin
+            if not records[date]['簽到時間'] or signin < records[date]['簽到時間']:
+                records[date]['簽到時間'] = signin
         
         if signout:
-            records[date]['簽退時間'] = signout
+            if not records[date]['簽退時間'] or signout > records[date]['簽退時間']:
+                records[date]['簽退時間'] = signout
+
+    # 計算工時
+    for record in records.values():
+        signin_time = record['簽到時間']
+        signout_time = record['簽退時間']
+        
+        if signin_time and signout_time:
+            work_hours = calculate_work_hours(signin_time, signout_time)
+            record['工時'] = work_hours
 
     export_path = filedialog.asksaveasfilename(defaultextension='.csv', filetypes=[('CSV 檔案', '*.csv')])
 
     if export_path:
         with open(export_path, 'w', newline='') as file:
-            writer = csv.DictWriter(file, fieldnames=['日期', '簽到時間', '簽退時間'])
+            writer = csv.DictWriter(file, fieldnames=['日期', '簽到時間', '簽退時間', '工時'])
             writer.writeheader()
             writer.writerows(records.values())
 
         messagebox.showinfo('成功', f'簽到記錄已匯出至 {export_path}。')
+
+def calculate_work_hours(signin_time, signout_time):
+
+    signin = datetime.datetime.strptime(signin_time, '%H:%M:%S')
+    signout = datetime.datetime.strptime(signout_time, '%H:%M:%S')
+    work_duration = signout - signin
+    work_hours = work_duration.total_seconds() / 3600  # 轉換為小時數
+    work_hours_str = f'{work_hours:.2f} 小時'  # 格式化工時字串，取小數點後兩位
+    return work_hours_str
 
 def show_history():
     def filter_records():
@@ -242,7 +289,7 @@ if exe_name == "Clock-In-NEW.exe":
         if os.path.exists("Clock-In.exe"):
             os.remove("Clock-In.exe")
         os.rename(exe_name, new_name)
-        messagebox.showinfo('提示', '首次執行此版本，環境設置成功，請重新啟動。')
+        messagebox.showinfo('提示', '首次執行此版本，環境設置成功，請使用管理員身分重新啟動。')
         sys.exit()
 else:
         root.mainloop()
