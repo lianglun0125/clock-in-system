@@ -156,20 +156,21 @@ def export_records():
 
     records = {}
     for record in data:
-        date = record[0]
-        signin = record[1]
-        signout = record[2]
+        if len(record) >= 3:
+            date = record[0]
+            signin = record[1]
+            signout = record[2]
 
-        if date not in records:
-            records[date] = {'日期': date, '簽到時間': '', '簽退時間': '', '工時': ''}
-        
-        if signin:
-            if not records[date]['簽到時間'] or signin < records[date]['簽到時間']:
-                records[date]['簽到時間'] = signin
-        
-        if signout:
-            if not records[date]['簽退時間'] or signout > records[date]['簽退時間']:
-                records[date]['簽退時間'] = signout
+            if date not in records:
+                records[date] = {'日期': date, '簽到時間': '', '簽退時間': '', '工時': ''}
+            
+            if signin:
+                if not records[date]['簽到時間'] or signin < records[date]['簽到時間']:
+                    records[date]['簽到時間'] = signin
+            
+            if signout:
+                if not records[date]['簽退時間'] or signout > records[date]['簽退時間']:
+                    records[date]['簽退時間'] = signout
 
     # 計算工時
     for record in records.values():
@@ -276,7 +277,7 @@ def is_admin():
     except:
         return False
 
-if is_admin():
+if True:
     root = tk.Tk()
     root.title('1.3.5')
     root.geometry("205x180")
