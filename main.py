@@ -1,3 +1,4 @@
+import ctypes
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
@@ -13,7 +14,7 @@ import sys
 from threading import Thread
 
 
-# Version 1.3.0
+# Version 1.3.5
 
 # 檢查資料夾是否存在，如果不存在，則創建資料夾
 folder_path = 'C:/Program Files (x86)/Work-Record'
@@ -129,7 +130,18 @@ def save_record(action):
     if action == '簽到':
         record = [date, time, ''] 
     elif action == '簽退':
-        record = [date, '', time]  
+        # 檢查是否已簽到，如果沒有則顯示警告訊息
+        with open('C:/Program Files (x86)/Work-Record/attendance.csv', 'r') as file:
+            reader = csv.reader(file)
+            data = list(reader)
+        
+        for record in data:
+            if record[0] == str(date) and record[1]:  # 如果今天已經簽到
+                record = [date, '', time]
+                break
+        else:
+            messagebox.showwarning('錯誤', '阿咪今天尚未簽到，無法簽退哦。')
+            return
 
     with open('C:/Program Files (x86)/Work-Record/attendance.csv', 'a', newline='') as file:
         writer = csv.writer(file)
@@ -258,58 +270,46 @@ def show_history():
 
     root.update()
 
-def show_version():
-    version_w = tk.Toplevel(root)
-    version_w.title('版本資訊')
-    version_w.geometry("218x120")
-    version_w.resizable(False, False)
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
 
-    version_label = tk.Label(version_w, text='Ver. 1.3.0 更新內容', font=('微軟正黑體', 10, 'bold'), fg='#191970')
-    version_label.pack()
-    new_label = tk.Label(version_w, text='> 匯出簽到記錄造成時間錯誤修正', font=('微軟正黑體', 10, 'bold'), fg='#191970')
-    new_label.pack()
-    new1_label = tk.Label(version_w, text='> 匯出簽到記錄新增[工時]', font=('微軟正黑體', 10, 'bold'), fg='#191970')
-    new1_label.pack()
-    new2_label = tk.Label(version_w, text='> 新增[檢查更新]按鈕', font=('微軟正黑體', 10, 'bold'), fg='#191970')
-    new2_label.pack()
-    update_label = tk.Label(version_w, text='Last Update - 20230706', font=('微軟正黑體', 10, 'bold'), fg='#191970')
-    update_label.pack()
+if is_admin():
+    root = tk.Tk()
+    root.title('1.3.5')
+    root.geometry("205x180")
+    root.resizable(False, False)
 
-root = tk.Tk()
-root.title('1.3.1')
-root.geometry("205x180")
-root.resizable(False, False)
+    signin_button = ttk.Button(root, text='今日簽到', command=lambda: save_record('簽到'))
+    signin_button.pack(pady=3)
 
-signin_button = ttk.Button(root, text='今日簽到', command=lambda: save_record('簽到'))
-signin_button.pack(pady=3)
+    signout_button = ttk.Button(root, text='今日簽退', command=lambda: save_record('簽退'))
+    signout_button.pack(pady=3)
 
-signout_button = ttk.Button(root, text='今日簽退', command=lambda: save_record('簽退'))
-signout_button.pack(pady=3)
+    history_button = ttk.Button(root, text='查看簽到紀錄', command=show_history)
+    history_button.pack(pady=3)
 
-history_button = ttk.Button(root, text='查看簽到紀錄', command=show_history)
-history_button.pack(pady=3)
+    export_history_button = ttk.Button(root, text='匯出簽到紀錄', command=export_records)
+    export_history_button.pack(pady=3)
 
-export_history_button = ttk.Button(root, text='匯出簽到紀錄', command=export_records)
-export_history_button.pack(pady=3)
+    check_update_button = ttk.Button(root, text='檢查更新', command=check_update)
+    check_update_button.pack(pady=3)
 
-check_update_button = ttk.Button(root, text='檢查更新', command=check_update)
-check_update_button.pack(pady=3)
+    piglabel = tk.Label(root, text='阿咪今天簽到了嗎？', font=('微軟正黑體', 12, 'bold'), fg='#191970')
+    piglabel.pack(pady=3)
 
-piglabel = tk.Label(root, text='阿咪今天簽到了嗎？', font=('微軟正黑體', 12, 'bold'), fg='#191970')
-piglabel.pack(pady=3)
-
-exe_name = os.path.basename(sys.argv[0])
-if exe_name == "Clock-In-NEW.exe":
-    new_name = "Clock-In.exe"
-    if os.path.exists("Clock-In.exe"):
-        os.remove("Clock-In.exe")
-    os.rename(exe_name, new_name)
-    messagebox.showinfo('提示', '首次執行此版本，環境設置成功，請使用管理員身分重新啟動。')
-    sys.exit()
+    exe_name = os.path.basename(sys.argv[0])
+    if exe_name == "Clock-In-NEW.exe":
+        new_name = "Clock-In.exe"
+        if os.path.exists("Clock-In.exe"):
+            os.remove("Clock-In.exe")
+        os.rename(exe_name, new_name)
+        messagebox.showinfo('提示', '首次執行此版本，環境設置成功，請使用管理員身分重新啟動。')
+        sys.exit()
+    else:
+        root.mainloop()
 else:
-    root.mainloop()
-
-
-
-
-
+    messagebox.showerror('Permission Denied', '阿咪，要用管理員身分執行哦')
+    sys.exit()
