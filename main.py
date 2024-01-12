@@ -277,7 +277,7 @@ def is_admin():
     except:
         return False
 
-if True:
+if is_admin():
     root = tk.Tk()
     root.title('1.3.5')
     root.geometry("205x180")
